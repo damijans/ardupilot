@@ -64,7 +64,7 @@ void AP_WindVane_NMEA::update()
         if (decode(c)) {
             // user may not have NMEA selected for both speed and direction
             if (_frontend._direction_type.get() == _frontend.WindVaneType::WINDVANE_NMEA) {
-                direction_update_frontend(wrap_PI(radians(_wind_dir_deg + _frontend._dir_analog_bearing_offset.get())));
+                direction_update_frontend(wrap_PI(radians(_wind_dir_deg + _frontend._dir_analog_bearing_offset.get()) + AP::ahrs().yaw));
             }
             if (_frontend._speed_sensor_type.get() == _frontend.Speed_type::WINDSPEED_NMEA) {
                 speed_update_frontend(_speed_ms);
@@ -153,7 +153,7 @@ bool AP_WindVane_NMEA::decode_latest_term()
 
     switch (_term_number) {
         case 1:
-            _wind_dir_deg = atof(_term);
+            _wind_dir_deg = strtof(_term, NULL);
             // check for sensible value
             if (is_negative(_wind_dir_deg) || _wind_dir_deg > 360.0f) {
                 _sentence_valid = false;
@@ -169,7 +169,7 @@ bool AP_WindVane_NMEA::decode_latest_term()
             break;
 
         case 3:
-            _speed_ms = atof(_term);
+            _speed_ms = strtof(_term, NULL);
             break;
 
         case 4:

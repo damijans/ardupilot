@@ -136,8 +136,10 @@ FLASH_RESERVE_START_KB 64
 # one IMU
 IMU Invensense SPI:mpu6000 ROTATION_YAW_180
 
-# one baro
+# probe for I2C BMP280, but allow init on board variants without onboard baro too
 BARO BMP280 I2C:0:0x76
+define HAL_PROBE_EXTERNAL_I2C_BAROS
+define HAL_BARO_ALLOW_INIT_NO_BARO
 
 # no built-in compass, but probe the i2c bus for all possible
 # external compass types
@@ -168,6 +170,6 @@ define BOARD_PWM_COUNT_DEFAULT 8
 #define CH_DBG_ENABLE_STACK_CHECK TRUE
 
 # setup for OSD
-define OSD_ENABLED ENABLED
+define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 1
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin

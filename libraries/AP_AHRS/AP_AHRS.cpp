@@ -18,6 +18,8 @@
 #include "AP_AHRS_View.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Logger/AP_Logger.h>
+#include <AP_GPS/AP_GPS.h>
+#include <AP_Baro/AP_Baro.h>
 #include <AP_NMEA_Output/AP_NMEA_Output.h>
 
 extern const AP_HAL::HAL& hal;
@@ -234,7 +236,7 @@ void AP_AHRS::update_orientation()
             _compass->set_board_orientation(orientation);
         }
     } else {
-        _custom_rotation.from_euler(_custom_roll, _custom_pitch, _custom_yaw);
+        _custom_rotation.from_euler(radians(_custom_roll), radians(_custom_pitch), radians(_custom_yaw));
         AP::ins().set_board_orientation(orientation, &_custom_rotation);
         if (_compass != nullptr) {
             _compass->set_board_orientation(orientation, &_custom_rotation);
@@ -255,7 +257,7 @@ Vector2f AP_AHRS::groundspeed_vector(void)
         const Vector3f wind = wind_estimate();
         const Vector2f wind2d(wind.x, wind.y);
         const Vector2f airspeed_vector(_cos_yaw * airspeed, _sin_yaw * airspeed);
-        gndVelADS = airspeed_vector - wind2d;
+        gndVelADS = airspeed_vector + wind2d;
     }
 
     // Generate estimate of ground speed vector using GPS
@@ -502,6 +504,10 @@ void AP_AHRS::Log_Write_Home_And_Origin()
     }
 }
 
+// get apparent to true airspeed ratio
+float AP_AHRS::get_EAS2TAS(void) const {
+    return AP::baro().get_EAS2TAS();
+}
 
 void AP_AHRS::update_nmea_out()
 {

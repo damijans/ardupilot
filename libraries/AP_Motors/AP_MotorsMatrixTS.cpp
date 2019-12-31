@@ -67,6 +67,11 @@ void AP_MotorsMatrixTS::output_to_motors()
 // includes new scaling stability patch
 void AP_MotorsMatrixTS::output_armed_stabilizing()
 {
+    if (enable_yaw_torque) {
+        AP_MotorsMatrix::output_armed_stabilizing();
+        return;
+    }
+
     float   roll_thrust;                // roll thrust input value, +/- 1.0
     float   pitch_thrust;               // pitch thrust input value, +/- 1.0
     float   throttle_thrust;            // throttle thrust input value, 0.0 - 1.0
@@ -75,8 +80,8 @@ void AP_MotorsMatrixTS::output_armed_stabilizing()
 
     // apply voltage and air pressure compensation
     const float compensation_gain = get_compensation_gain(); // compensation for battery voltage and altitude
-    roll_thrust = _roll_in * compensation_gain;
-    pitch_thrust = _pitch_in * compensation_gain;
+    roll_thrust = (_roll_in + _roll_in_ff) * compensation_gain;
+    pitch_thrust = (_pitch_in + _pitch_in_ff) * compensation_gain;
     throttle_thrust = get_throttle() * compensation_gain;
 
     // sanity check throttle is above zero and below current limited throttle
@@ -104,7 +109,8 @@ void AP_MotorsMatrixTS::output_armed_stabilizing()
     if (thrust_max > 1.0f) {
         thr_adj = 1.0f - thrust_max;
         limit.throttle_upper = true;
-        limit.roll_pitch = true;
+        limit.roll = true;
+        limit.pitch = true;
         for (int i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motor_enabled[i]) {
                 // calculate the thrust outputs for roll and pitch
@@ -112,6 +118,9 @@ void AP_MotorsMatrixTS::output_armed_stabilizing()
             }
         }
     }
+
+    // compensation_gain can never be zero
+    _throttle_out = (throttle_thrust + thr_adj) / compensation_gain;
 
 }
 
@@ -123,6 +132,7 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
     }
 
     bool success = false;
+    enable_yaw_torque = true;
 
     switch (frame_class) {
 
@@ -136,6 +146,15 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
         case MOTOR_FRAME_QUAD:
             switch (frame_type) {
                 case MOTOR_FRAME_TYPE_PLUS:
+                    // differential torque for yaw: rotation directions specified below
+                    add_motor(AP_MOTORS_MOT_1,  90, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 2);
+                    add_motor(AP_MOTORS_MOT_2, -90, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 4);
+                    add_motor(AP_MOTORS_MOT_3,   0, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  1);
+                    add_motor(AP_MOTORS_MOT_4, 180, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  3);
+
+                    success = true;
+                    break;
+                case MOTOR_FRAME_TYPE_NYT_PLUS:
                     // motors 1,2 on wings, motors 3,4 on vertical tail/subfin
                     // motors 1,2 are counter-rotating, as are motors 3,4
                     // left wing motor is CW (looking from front)
@@ -144,14 +163,29 @@ void AP_MotorsMatrixTS::setup_motors(motor_frame_class frame_class, motor_frame_
                     add_motor(AP_MOTORS_MOT_2, -90, 0, 4);
                     add_motor(AP_MOTORS_MOT_3,   0, 0, 1);
                     add_motor(AP_MOTORS_MOT_4, 180, 0, 3);
+
+                    enable_yaw_torque = false;
                     success = true;
                     break;
                 case MOTOR_FRAME_TYPE_X:
                     // PLUS_TS layout rotated 45 degrees about X axis
+                    // differential torque for yaw: rotation directions specified below
+                    add_motor(AP_MOTORS_MOT_1,   45, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 1);
+                    add_motor(AP_MOTORS_MOT_2, -135, AP_MOTORS_MATRIX_YAW_FACTOR_CCW, 3);
+                    add_motor(AP_MOTORS_MOT_3,  -45, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  4);
+                    add_motor(AP_MOTORS_MOT_4,  135, AP_MOTORS_MATRIX_YAW_FACTOR_CW,  2);
+
+                    success = true;
+                    break;
+                case MOTOR_FRAME_TYPE_NYT_X:
+                    // PLUS_TS layout rotated 45 degrees about X axis
+                    // no differential torque for yaw: wing and fin motors counter-rotating
                     add_motor(AP_MOTORS_MOT_1,   45, 0, 1);
                     add_motor(AP_MOTORS_MOT_2, -135, 0, 3);
                     add_motor(AP_MOTORS_MOT_3,  -45, 0, 4);
                     add_motor(AP_MOTORS_MOT_4,  135, 0, 2);
+
+                    enable_yaw_torque = false;
                     success = true;
                     break;
                 default:
